@@ -8,6 +8,8 @@ import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
 import org.json.JSONObject
 import java.net.URLEncoder
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 class VidkingProvider : MainAPI() {
     override var mainUrl = "https://www.vidking.net"
@@ -192,85 +194,102 @@ class VidkingProvider : MainAPI() {
             "myflixerzupcloud"
         )
 
-        var found = false
+        val found = java.util.concurrent.atomic.AtomicBoolean(false)
+        val semaphore = Semaphore(6)
 
-        for (server in servers) {
-            val url = if (linkData.type == "movie") {
-                "${streamApi}/$server/sources-with-title?title=$encTitle&mediaType=movie&year=$yearParam&tmdbId=${linkData.id}&imdbId=$imdbParam"
-            } else {
-                "${streamApi}/$server/sources-with-title?title=$encTitle&mediaType=tv&year=$yearParam&tmdbId=${linkData.id}&episodeId=${linkData.episode}&seasonId=${linkData.season}&imdbId=$imdbParam"
-            }
+        servers.amap { server ->
+            semaphore.withPermit {
+                val url = if (linkData.type == "movie") {
+                    "${streamApi}/$server/sources-with-title?title=$encTitle&mediaType=movie&year=$yearParam&tmdbId=${linkData.id}&imdbId=$imdbParam"
+                } else {
+                    "${streamApi}/$server/sources-with-title?title=$encTitle&mediaType=tv&year=$yearParam&tmdbId=${linkData.id}&episodeId=${linkData.episode}&seasonId=${linkData.season}&imdbId=$imdbParam"
+                }
 
-            val encrypted = runCatching {
-                app.get(url, headers = headers, timeout = 10000).text
-            }.getOrNull() ?: continue
+                val encrypted = runCatching {
+                    app.get(url, headers = headers, timeout = 5000).text
+                }.getOrNull() ?: return@withPermit
 
-            val decrypted = runCatching {
-                app.post(
-                    "$decryptApi/dec-videasy",
-                    json = mapOf("text" to encrypted, "id" to linkData.id),
-                    timeout = 10000
-                ).text
-            }.getOrNull() ?: continue
+                val decrypted = runCatching {
+                    app.post(
+                        "$decryptApi/dec-videasy",
+                        json = mapOf("text" to encrypted, "id" to linkData.id),
+                        timeout = 5000
+                    ).text
+                }.getOrNull() ?: return@withPermit
 
-            val result = runCatching { JSONObject(decrypted).optJSONObject("result") }.getOrNull() ?: continue
+                val result = runCatching { JSONObject(decrypted).optJSONObject("result") }.getOrNull() ?: return@withPermit
 
-            val sources = result.optJSONArray("sources")
-            if (sources != null) {
-                for (i in 0 until sources.length()) {
-                    val item = sources.optJSONObject(i) ?: continue
-                    val sourceUrl = item.optString("url")
-                    val quality = item.optString("quality")
-                    if (sourceUrl.isBlank()) continue
+                val sources = result.optJSONArray("sources")
+                if (sources != null) {
+                    for (i in 0 until sources.length()) {
+                        val item = sources.optJSONObject(i) ?: continue
+                        val sourceUrl = item.optString("url")
+                        val quality = item.optString("quality")
+                        if (sourceUrl.isBlank()) continue
 
-                    val linkType = when {
-                        sourceUrl.contains(".m3u8", ignoreCase = true) -> ExtractorLinkType.M3U8
-                        sourceUrl.contains(".mp4", ignoreCase = true) || sourceUrl.contains(".mkv", ignoreCase = true) -> ExtractorLinkType.VIDEO
-                        else -> INFER_TYPE
-                    }
-
-                    callback.invoke(
-                        newExtractorLink(
-                            "Vidking[${server.capitalizeServer()}]",
-                            "Vidking[${server.capitalizeServer()}] $quality",
-                            sourceUrl,
-                            linkType
-                        ) {
-                            this.quality = getIndexQuality(quality)
-                            this.headers = headers
+                        val linkType = when {
+                            sourceUrl.contains(".m3u8", ignoreCase = true) -> ExtractorLinkType.M3U8
+                            sourceUrl.contains(".mp4", ignoreCase = true) || sourceUrl.contains(".mkv", ignoreCase = true) -> ExtractorLinkType.VIDEO
+                            else -> INFER_TYPE
                         }
-                    )
-                    found = true
-                }
-            }
 
-            val subtitles = result.optJSONArray("subtitles")
-            if (subtitles != null) {
-                for (i in 0 until subtitles.length()) {
-                    val item = subtitles.optJSONObject(i) ?: continue
-                    val subUrl = item.optString("url").ifBlank { continue }
-                    val rawLang = item.optString("language").ifBlank { "Unknown" }
-                    val normalized = getLanguage(rawLang) ?: rawLang
-                    subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
+                        callback.invoke(
+                            newExtractorLink(
+                                "Vidking[${server.capitalizeServer()}]",
+                                "Vidking[${server.capitalizeServer()}] $quality",
+                                sourceUrl,
+                                linkType
+                            ) {
+                                this.quality = getIndexQuality(quality)
+                                this.headers = headers
+                            }
+                        )
+                        found.set(true)
+                    }
                 }
-            }
 
-            val tracks = result.optJSONArray("tracks")
-            if (tracks != null) {
-                for (i in 0 until tracks.length()) {
-                    val item = tracks.optJSONObject(i) ?: continue
-                    val kind = item.optString("kind").orEmpty()
-                    if (kind.contains("caption", ignoreCase = true) || kind.contains("sub", ignoreCase = true)) {
-                        val subUrl = item.optString("file").ifBlank { continue }
-                        val rawLang = item.optString("label").ifBlank { "Unknown" }
+                val subtitles = result.optJSONArray("subtitles")
+                if (subtitles != null) {
+                    for (i in 0 until subtitles.length()) {
+                        val item = subtitles.optJSONObject(i) ?: continue
+                        val subUrl = item.optString("url").ifBlank { continue }
+                        val rawLang = item.optString("lang").ifBlank { item.optString("language") }.ifBlank { "Unknown" }
                         val normalized = getLanguage(rawLang) ?: rawLang
+                        if (!normalized.equals("English", ignoreCase = true)) continue
+                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
+                    }
+                }
+
+                val tracks = result.optJSONArray("tracks")
+                if (tracks != null) {
+                    for (i in 0 until tracks.length()) {
+                        val item = tracks.optJSONObject(i) ?: continue
+                        val kind = item.optString("kind").orEmpty()
+                        if (kind.contains("caption", ignoreCase = true) || kind.contains("sub", ignoreCase = true)) {
+                            val subUrl = item.optString("file").ifBlank { continue }
+                            val rawLang = item.optString("label").ifBlank { "Unknown" }
+                            val normalized = getLanguage(rawLang) ?: rawLang
+                            if (!normalized.equals("English", ignoreCase = true)) continue
+                            subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
+                        }
+                    }
+                }
+
+                val captions = result.optJSONArray("captions")
+                if (captions != null) {
+                    for (i in 0 until captions.length()) {
+                        val item = captions.optJSONObject(i) ?: continue
+                        val subUrl = item.optString("url").ifBlank { continue }
+                        val rawLang = item.optString("lan").ifBlank { "Unknown" }
+                        val normalized = getLanguage(rawLang) ?: rawLang
+                        if (!normalized.equals("English", ignoreCase = true)) continue
                         subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
                     }
                 }
             }
         }
 
-        return found
+        return found.get()
     }
 
     private fun quote(value: String): String =
@@ -291,9 +310,9 @@ class VidkingProvider : MainAPI() {
         "Catalan" to listOf("ca", "cat"),
         "Chinese" to listOf("zh", "zho"),
         "Croatian" to listOf("hr", "hrv"),
-        "Czech" to listOf("cs", "ces"),
+        "Czech" to listOf("cs", "ces", "cze"),
         "Danish" to listOf("da", "dan"),
-        "Dutch" to listOf("nl", "nld"),
+        "Dutch" to listOf("nl", "nld", "dut"),
         "English" to listOf("en", "eng"),
         "Estonian" to listOf("et", "est"),
         "Filipino" to listOf("tl", "tgl", "fil"),
@@ -302,7 +321,7 @@ class VidkingProvider : MainAPI() {
         "Galician" to listOf("gl", "glg"),
         "Georgian" to listOf("ka", "kat"),
         "German" to listOf("de", "deu", "ger"),
-        "Greek" to listOf("el", "ell"),
+        "Greek" to listOf("el", "ell", "gre"),
         "Gujarati" to listOf("gu", "guj"),
         "Hebrew" to listOf("he", "heb"),
         "Hindi" to listOf("hi", "hin"),
@@ -316,19 +335,19 @@ class VidkingProvider : MainAPI() {
         "Korean" to listOf("ko", "kor"),
         "Latvian" to listOf("lv", "lav"),
         "Lithuanian" to listOf("lt", "lit"),
-        "Macedonian" to listOf("mk", "mkd"),
+        "Macedonian" to listOf("mk", "mkd", "mac"),
         "Malay" to listOf("ms", "msa"),
         "Malayalam" to listOf("ml", "mal"),
         "Maltese" to listOf("mt", "mlt"),
         "Marathi" to listOf("mr", "mar"),
         "Mongolian" to listOf("mn", "mon"),
         "Nepali" to listOf("ne", "nep"),
-        "Norwegian" to listOf("no", "nor"),
+        "Norwegian" to listOf("no", "nor", "nob"),
         "Persian" to listOf("fa", "fas"),
         "Polish" to listOf("pl", "pol"),
         "Portuguese" to listOf("pt", "por"),
         "Punjabi" to listOf("pa", "pan"),
-        "Romanian" to listOf("ro", "ron"),
+        "Romanian" to listOf("ro", "ron", "rum"),
         "Russian" to listOf("ru", "rus"),
         "Serbian" to listOf("sr", "srp"),
         "Sinhala" to listOf("si", "sin"),
