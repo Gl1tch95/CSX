@@ -55,7 +55,7 @@ class VidkingProvider : MainAPI() {
 
         val res = app.get(
             "${tmdbApi}/${request.data}?language=en-US&page=$page",
-            timeout = 10000
+            timeout = 10L
         ).parsedSafe<TmdbPagedResults>() ?: throw ErrorLoadingException("Invalid response")
 
         val home = res.results.orEmpty().mapNotNull { it.toSearchResponse(defaultType) }
@@ -67,7 +67,7 @@ class VidkingProvider : MainAPI() {
     override suspend fun search(query: String, page: Int): SearchResponseList? {
         val res = app.get(
             "${tmdbApi}/search/multi?language=en-US&query=${quote(query)}&page=$page",
-            timeout = 10000
+            timeout = 10L
         ).parsedSafe<TmdbPagedResults>() ?: return null
 
         val results = res.results.orEmpty().mapNotNull { it.toSearchResponse() }
@@ -85,7 +85,7 @@ class VidkingProvider : MainAPI() {
             "${tmdbApi}/tv/${data.id}?language=en-US&append_to_response=external_ids"
         }
 
-        val detail = app.get(detailUrl, timeout = 10000).parsedSafe<TmdbDetail>() ?: return null
+        val detail = app.get(detailUrl, timeout = 10L).parsedSafe<TmdbDetail>() ?: return null
         val title = detail.title ?: detail.name ?: return null
         val poster = imageUrl(detail.posterPath, 500)
         val background = imageUrl(detail.backdropPath, 1280)
@@ -206,14 +206,14 @@ class VidkingProvider : MainAPI() {
                 }
 
                 val encrypted = runCatching {
-                    app.get(url, headers = headers, timeout = 5000).text
+                    app.get(url, headers = headers, timeout = 5L).text
                 }.getOrNull() ?: return@withPermit
 
                 val decrypted = runCatching {
                     app.post(
                         "$decryptApi/dec-videasy",
                         json = mapOf("text" to encrypted, "id" to linkData.id),
-                        timeout = 5000
+                        timeout = 5L
                     ).text
                 }.getOrNull() ?: return@withPermit
 
@@ -256,7 +256,7 @@ class VidkingProvider : MainAPI() {
                         val rawLang = item.optString("lang").ifBlank { item.optString("language") }.ifBlank { "Unknown" }
                         val normalized = getLanguage(rawLang) ?: rawLang
                         if (!normalized.equals("English", ignoreCase = true)) continue
-                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
+                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl, headers))
                     }
                 }
 
@@ -270,7 +270,7 @@ class VidkingProvider : MainAPI() {
                             val rawLang = item.optString("label").ifBlank { "Unknown" }
                             val normalized = getLanguage(rawLang) ?: rawLang
                             if (!normalized.equals("English", ignoreCase = true)) continue
-                            subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
+                            subtitleCallback.invoke(newSubtitleFile(normalized, subUrl, headers))
                         }
                     }
                 }
@@ -283,7 +283,7 @@ class VidkingProvider : MainAPI() {
                         val rawLang = item.optString("lan").ifBlank { "Unknown" }
                         val normalized = getLanguage(rawLang) ?: rawLang
                         if (!normalized.equals("English", ignoreCase = true)) continue
-                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
+                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl, headers))
                     }
                 }
             }
@@ -379,14 +379,14 @@ class VidkingProvider : MainAPI() {
             language.substringAfter("CR_")
         } else {
             language
-        }
+        }.trim()
 
         if (normalizedLang.isBlank()) {
-            normalizedLang = language
+            normalizedLang = language.trim()
         }
 
         val tag = languageMap.entries.find { entry ->
-            entry.value.contains(normalizedLang.lowercase().trim())
+            entry.value.contains(normalizedLang.lowercase()) || entry.key.equals(normalizedLang, ignoreCase = true)
         }?.key
 
         return tag ?: normalizedLang
