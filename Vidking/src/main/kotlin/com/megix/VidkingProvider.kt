@@ -254,6 +254,20 @@ class VidkingProvider : MainAPI() {
                     subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
                 }
             }
+
+            val tracks = result.optJSONArray("tracks")
+            if (tracks != null) {
+                for (i in 0 until tracks.length()) {
+                    val item = tracks.optJSONObject(i) ?: continue
+                    val kind = item.optString("kind").orEmpty()
+                    if (kind.contains("caption", ignoreCase = true) || kind.contains("sub", ignoreCase = true)) {
+                        val subUrl = item.optString("file").ifBlank { continue }
+                        val rawLang = item.optString("label").ifBlank { "Unknown" }
+                        val normalized = getLanguage(rawLang) ?: rawLang
+                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
+                    }
+                }
+            }
         }
 
         return found
