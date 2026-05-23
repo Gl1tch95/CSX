@@ -1,0 +1,179 @@
+[
+    {
+        "url": "https://raw.githubusercontent.com/Gl1tch95/CSX/builds/Bollyflix.cs3",
+        "status": 1,
+        "version": 32,
+        "name": "Bollyflix",
+        "internalName": "Bollyflix",
+        "authors": [
+            "megix"
+        ],
+        "description": "Movies and Series upto 4K",
+        "fileSize": 38945,
+        "repositoryUrl": "https://github.com/Gl1tch95/CSX",
+        "language": "hi",
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "AsianDrama",
+            "Anime"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/refs/heads/master/Bollyflix/icon.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-5095e8c1954cbc00259bc55e7342c34045d16a86515efa514bb7954f38593419"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/Gl1tch95/CSX/builds/CineStream.cs3",
+        "status": 1,
+        "version": 440,
+        "name": "CineStream",
+        "internalName": "CineStream",
+        "authors": [
+            "megix"
+        ],
+        "description": "One stop solution for Movies, Series, Anime, AsianDrama and Torrents",
+        "fileSize": 634421,
+        "repositoryUrl": "https://github.com/Gl1tch95/CSX",
+        "language": "en",
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "AsianDrama",
+            "Anime",
+            "Torrent"
+        ],
+        "iconUrl": "https://github.com/SaurabhKaperwan/CSX/raw/refs/heads/master/CineStream/icon.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-c2fbd7ebd572809e64a35ddc4a847fbf0ecd3348d64fbc3c0e2b21ac3b7b8342"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/Gl1tch95/CSX/builds/GDIndex.cs3",
+        "status": 1,
+        "version": 6,
+        "name": "GDIndex",
+        "internalName": "GDIndex",
+        "authors": [
+            "Horis"
+        ],
+        "fileSize": 16562,
+        "repositoryUrl": "https://github.com/Gl1tch95/CSX",
+        "language": "en",
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "iconUrl": "https://github.com/SaurabhKaperwan/CSX/raw/refs/heads/master/GDIndex/icon.ico",
+        "apiVersion": 1,
+        "fileHash": "sha256-0421686bdb962efb1f6691a5eb418197d4627404a5b93e69ba29440e7424981b"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/Gl1tch95/CSX/builds/MoviesDrive.cs3",
+        "status": 1,
+        "version": 31,
+        "name": "MoviesDrive",
+        "internalName": "MoviesDrive",
+        "authors": [
+            "megix"
+        ],
+        "description": "High Quality Movies and TV Shows",
+        "fileSize": 46150,
+        "repositoryUrl": "https://github.com/Gl1tch95/CSX",
+        "language": "hi",
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "AsianDrama",
+            "Anime"
+        ],
+        "iconUrl": "https://github.com/SaurabhKaperwan/CSX/raw/refs/heads/master/MoviesDrive/icon.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-a516acfb9393bc6f41f45aa0c79494e9d98181f9d689da2846112a61c9724e95"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/Gl1tch95/CSX/builds/Moviesmod.cs3",
+        "status": 1,
+        "version": 30,
+        "name": "Moviesmod",
+        "internalName": "Moviesmod",
+        "authors": [
+            "megix"
+        ],
+        "description": "Includes Topmovies",
+        "fileSize": 42532,
+        "repositoryUrl": "https://github.com/Gl1tch95/CSX",
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "AsianDrama",
+            "Anime"
+        ],
+        "iconUrl": "https://github.com/SaurabhKaperwan/CSX/raw/refs/heads/master/Moviesmod/icon.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-c2c95844e383f7aa2fba2b760ce6282e01330c3ba327a2f981de072b9251c0e3"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/Gl1tch95/CSX/builds/OnlineMoviesHinditProvider.cs3",
+        "status": 1,
+        "version": 6,
+        "name": "OnlineMoviesHinditProvider",
+        "internalName": "OnlineMoviesHinditProvider",
+        "authors": [
+            "megix"
+        ],
+        "description": "Use VPN",
+        "fileSize": 11950,
+        "repositoryUrl": "https://github.com/Gl1tch95/CSX",
+        "language": "hi",
+        "tvTypes": [
+            "TvSeries",
+            "Movie"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/master/OnlineMoviesHinditProvider/icon.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-577919ca8bbf01ded9e9299851431447c5964e979a9c4eb73ffd82ca8733ae2d"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/Gl1tch95/CSX/builds/VegaMovies.cs3",
+        "status": 1,
+        "version": 79,
+        "name": "VegaMovies",
+        "internalName": "VegaMovies",
+        "authors": [
+            "megix"
+        ],
+        "description": "Includes LuxMovies, Rogmovies",
+        "fileSize": 48712,
+        "repositoryUrl": "https://github.com/Gl1tch95/CSX",
+        "language": "hi",
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "AsianDrama",
+            "Anime"
+        ],
+        "iconUrl": "https://github.com/SaurabhKaperwan/CSX/raw/refs/heads/master/VegaMovies/icon.jpg",
+        "apiVersion": 1,
+        "fileHash": "sha256-0212ec22e4f95c864a65275ec94ccfc8cf352af328cc50aa4ea41753a9b16590"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/Gl1tch95/CSX/builds/Vidking.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "Vidking",
+        "internalName": "Vidking",
+        "authors": [
+            "megix"
+        ],
+        "description": "Vidking player via TMDB catalog",
+        "fileSize": 63261,
+        "repositoryUrl": "https://github.com/Gl1tch95/CSX",
+        "language": "en",
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "iconUrl": "https://www.vidking.net/favicon.ico",
+        "apiVersion": 1,
+        "fileHash": "sha256-0ca4686b6ed0925faacb011574cdc8bdb146317b4f6aad55aa34a632a750fa5d"
+    }
+]
