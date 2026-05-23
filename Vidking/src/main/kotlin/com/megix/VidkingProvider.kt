@@ -256,7 +256,9 @@ class VidkingProvider : MainAPI() {
                         val rawLang = item.optString("lang").ifBlank { item.optString("language") }.ifBlank { "Unknown" }
                         val normalized = getLanguage(rawLang) ?: rawLang
                         if (!normalized.equals("English", ignoreCase = true)) continue
-                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl, headers))
+                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl) {
+                            this.headers = headers
+                        })
                     }
                 }
 
@@ -270,7 +272,9 @@ class VidkingProvider : MainAPI() {
                             val rawLang = item.optString("label").ifBlank { "Unknown" }
                             val normalized = getLanguage(rawLang) ?: rawLang
                             if (!normalized.equals("English", ignoreCase = true)) continue
-                            subtitleCallback.invoke(newSubtitleFile(normalized, subUrl, headers))
+                            subtitleCallback.invoke(newSubtitleFile(normalized, subUrl) {
+                                this.headers = headers
+                            })
                         }
                     }
                 }
@@ -283,7 +287,9 @@ class VidkingProvider : MainAPI() {
                         val rawLang = item.optString("lan").ifBlank { "Unknown" }
                         val normalized = getLanguage(rawLang) ?: rawLang
                         if (!normalized.equals("English", ignoreCase = true)) continue
-                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl, headers))
+                        subtitleCallback.invoke(newSubtitleFile(normalized, subUrl) {
+                            this.headers = headers
+                        })
                     }
                 }
             }
