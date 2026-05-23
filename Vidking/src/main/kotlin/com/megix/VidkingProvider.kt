@@ -1,31 +1,10 @@
 package com.megix
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.lagradost.cloudstream3.ErrorLoadingException
-import com.lagradost.cloudstream3.LoadResponse
-import com.lagradost.cloudstream3.MainAPI
-import com.lagradost.cloudstream3.SearchResponse
-import com.lagradost.cloudstream3.SubtitleFile
-import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.newMovieLoadResponse
-import com.lagradost.cloudstream3.newMovieSearchResponse
-import com.lagradost.cloudstream3.newSearchResponseList
-import com.lagradost.cloudstream3.newTvSeriesLoadResponse
-import com.lagradost.cloudstream3.newTvSeriesSearchResponse
+import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
-import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.INFER_TYPE
-import com.lagradost.cloudstream3.utils.MainPageRequest
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.SeasonData
-import com.lagradost.cloudstream3.utils.USER_AGENT
-import com.lagradost.cloudstream3.utils.getQualityFromName
-import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.newSubtitleFile
-import com.lagradost.cloudstream3.utils.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -283,6 +262,15 @@ class VidkingProvider : MainAPI() {
 
     private fun quote(value: String): String =
         URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
+    private fun getLanguage(language: String?): String? {
+        language ?: return null
+        val lower = language.lowercase().trim()
+        return when {
+            lower == "en" || lower == "eng" || lower == "english" -> "English"
+            else -> language
+        }
+    }
 
     private fun imageUrl(path: String?, size: Int): String? {
         if (path.isNullOrBlank()) return null
