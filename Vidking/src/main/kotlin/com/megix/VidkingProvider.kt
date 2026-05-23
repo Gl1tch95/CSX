@@ -60,7 +60,7 @@ class VidkingProvider : MainAPI() {
         return newHomePageResponse(request.name, home)
     }
 
-    override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query, 1)?.results
+    override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query, 1)?.items
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
         val res = app.get(
