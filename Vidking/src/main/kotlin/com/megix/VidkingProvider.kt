@@ -251,7 +251,6 @@ class VidkingProvider : MainAPI() {
                     val subUrl = item.optString("url").ifBlank { continue }
                     val rawLang = item.optString("language").ifBlank { "Unknown" }
                     val normalized = getLanguage(rawLang) ?: rawLang
-                    if (!normalized.equals("English", ignoreCase = true)) continue
                     subtitleCallback.invoke(newSubtitleFile(normalized, subUrl))
                 }
             }
@@ -263,13 +262,101 @@ class VidkingProvider : MainAPI() {
     private fun quote(value: String): String =
         URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
+    private val languageMap = mapOf(
+        "Afrikaans" to listOf("af", "afr"),
+        "Albanian" to listOf("sq", "sqi"),
+        "Amharic" to listOf("am", "amh"),
+        "Arabic" to listOf("ar", "ara"),
+        "Armenian" to listOf("hy", "hye"),
+        "Azerbaijani" to listOf("az", "aze"),
+        "Basque" to listOf("eu", "eus"),
+        "Belarusian" to listOf("be", "bel"),
+        "Bengali" to listOf("bn", "ben"),
+        "Bosnian" to listOf("bs", "bos"),
+        "Bulgarian" to listOf("bg", "bul"),
+        "Catalan" to listOf("ca", "cat"),
+        "Chinese" to listOf("zh", "zho"),
+        "Croatian" to listOf("hr", "hrv"),
+        "Czech" to listOf("cs", "ces"),
+        "Danish" to listOf("da", "dan"),
+        "Dutch" to listOf("nl", "nld"),
+        "English" to listOf("en", "eng"),
+        "Estonian" to listOf("et", "est"),
+        "Filipino" to listOf("tl", "tgl", "fil"),
+        "Finnish" to listOf("fi", "fin"),
+        "French" to listOf("fr", "fra"),
+        "Galician" to listOf("gl", "glg"),
+        "Georgian" to listOf("ka", "kat"),
+        "German" to listOf("de", "deu", "ger"),
+        "Greek" to listOf("el", "ell"),
+        "Gujarati" to listOf("gu", "guj"),
+        "Hebrew" to listOf("he", "heb"),
+        "Hindi" to listOf("hi", "hin"),
+        "Hungarian" to listOf("hu", "hun"),
+        "Icelandic" to listOf("is", "isl"),
+        "Indonesian" to listOf("id", "ind"),
+        "Italian" to listOf("it", "ita"),
+        "Japanese" to listOf("ja", "jpn"),
+        "Kannada" to listOf("kn", "kan"),
+        "Kazakh" to listOf("kk", "kaz"),
+        "Korean" to listOf("ko", "kor"),
+        "Latvian" to listOf("lv", "lav"),
+        "Lithuanian" to listOf("lt", "lit"),
+        "Macedonian" to listOf("mk", "mkd"),
+        "Malay" to listOf("ms", "msa"),
+        "Malayalam" to listOf("ml", "mal"),
+        "Maltese" to listOf("mt", "mlt"),
+        "Marathi" to listOf("mr", "mar"),
+        "Mongolian" to listOf("mn", "mon"),
+        "Nepali" to listOf("ne", "nep"),
+        "Norwegian" to listOf("no", "nor"),
+        "Persian" to listOf("fa", "fas"),
+        "Polish" to listOf("pl", "pol"),
+        "Portuguese" to listOf("pt", "por"),
+        "Punjabi" to listOf("pa", "pan"),
+        "Romanian" to listOf("ro", "ron"),
+        "Russian" to listOf("ru", "rus"),
+        "Serbian" to listOf("sr", "srp"),
+        "Sinhala" to listOf("si", "sin"),
+        "Slovak" to listOf("sk", "slk"),
+        "Slovenian" to listOf("sl", "slv"),
+        "Spanish" to listOf("es", "spa"),
+        "Swahili" to listOf("sw", "swa"),
+        "Swedish" to listOf("sv", "swe"),
+        "Tamil" to listOf("ta", "tam"),
+        "Telugu" to listOf("te", "tel"),
+        "Thai" to listOf("th", "tha"),
+        "Turkish" to listOf("tr", "tur"),
+        "Ukrainian" to listOf("uk", "ukr"),
+        "Urdu" to listOf("ur", "urd"),
+        "Uzbek" to listOf("uz", "uzb"),
+        "Vietnamese" to listOf("vi", "vie"),
+        "Welsh" to listOf("cy", "cym"),
+        "Yiddish" to listOf("yi", "yid")
+    )
+
     private fun getLanguage(language: String?): String? {
         language ?: return null
-        val lower = language.lowercase().trim()
-        return when {
-            lower == "en" || lower == "eng" || lower == "english" -> "English"
-            else -> language
+
+        var normalizedLang = if (language.contains("-")) {
+            language.substringBefore("-")
+        } else if (language.contains(" ")) {
+            language.substringBefore(" ")
+        } else if (language.contains("CR_")) {
+            language.substringAfter("CR_")
+        } else {
+            language
         }
+
+        if (normalizedLang.isBlank()) {
+            normalizedLang = language
+        }
+
+        val tag = languageMap.entries.find { entry ->
+            entry.value.contains(normalizedLang.lowercase().trim())
+        }?.key
+
+        return tag ?: normalizedLang
     }
 
     private fun imageUrl(path: String?, size: Int): String? {
