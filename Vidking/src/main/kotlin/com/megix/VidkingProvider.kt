@@ -34,6 +34,8 @@ class VidkingProvider : MainAPI() {
     }
 
 
+
+
     override val mainPage = mainPageOf(
         "trending/movie/day" to "Trending Movies",
         "trending/tv/day" to "Trending Series",
@@ -88,16 +90,18 @@ class VidkingProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val data = parseJson<LinkData>(url)
-        val type = data.type ?: "movie"
+        val json = runCatching { JSONObject(url) }.getOrNull() ?: return null
+        val id = json.optInt("id")
+        val type = json.optString("type", "movie")
 
         val append = "alternative_titles,credits,external_ids,videos,recommendations,content_ratings,release_dates"
 
         val resUrl = if (type == "movie") {
-            getTmdbUrl("movie/${data.id}?language=en-US&append_to_response=$append")
+            getTmdbUrl("movie/$id?language=en-US&append_to_response=$append")
         } else {
-            getTmdbUrl("tv/${data.id}?language=en-US&append_to_response=$append")
+            getTmdbUrl("tv/$id?language=en-US&append_to_response=$append")
         }
+
 
 
         val res = app.get(resUrl).parsedSafe<MediaDetail>() ?: return null
@@ -142,11 +146,11 @@ class VidkingProvider : MainAPI() {
         if (type == "tv") {
             val lastSeason = res.last_episode_to_air?.season_number
             val episodes = res.seasons?.filter { (it.seasonNumber ?: 0) != 0 }?.mapNotNull { season ->
-                app.get(getTmdbUrl("tv/${data.id}/season/${season.seasonNumber}?language=en-US"))
+                app.get(getTmdbUrl("tv/$id/season/${season.seasonNumber}?language=en-US"))
                     .parsedSafe<MediaDetailEpisodes>()?.episodes?.map { eps ->
                         newEpisode(
                             LinkData(
-                                id = data.id,
+                                id = id,
                                 imdbId = res.external_ids?.imdb_id,
                                 type = "tv",
                                 season = eps.seasonNumber,
@@ -200,7 +204,7 @@ class VidkingProvider : MainAPI() {
                 url,
                 TvType.Movie,
                 LinkData(
-                    id = data.id,
+                    id = id,
                     imdbId = res.external_ids?.imdb_id,
                     type = "movie",
                     title = title,
@@ -239,10 +243,13 @@ class VidkingProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val linkData = parseJson<LinkData>(data)
-        val title = linkData.title ?: return false
+        val json = runCatching { JSONObject(data) }.getOrNull() ?: return false
+        val title = json.optString("title").takeIf { it.isNotBlank() } ?: return false
+        val type = json.optString("type")
+        val season = json.optInt("season", -1).takeIf { it != -1 }
+        val episode = json.optInt("episode", -1).takeIf { it != -1 }
 
-        if (linkData.type == "tv" && (linkData.season == null || linkData.episode == null)) {
+        if (type == "tv" && (season == null || episode == null)) {
             return false
         }
 
@@ -254,8 +261,8 @@ class VidkingProvider : MainAPI() {
         )
 
         val encTitle = quote(quote(title))
-        val imdbParam = linkData.imdbId ?: ""
-        val yearParam = linkData.year?.toString() ?: ""
+        val imdbParam = json.optString("imdbId", "")
+        val yearParam = json.optInt("year", -1).let { if (it == -1) "" else it.toString() }
 
         val servers = listOf(
             "cdn",
@@ -270,10 +277,10 @@ class VidkingProvider : MainAPI() {
 
         servers.amap { server ->
             semaphore.withPermit {
-                val url = if (linkData.type == "movie") {
-                    "${streamApi}/$server/sources-with-title?title=$encTitle&mediaType=movie&year=$yearParam&tmdbId=${linkData.id}&imdbId=$imdbParam"
+                val url = if (type == "movie") {
+                    "${streamApi}/$server/sources-with-title?title=$encTitle&mediaType=movie&year=$yearParam&tmdbId=${json.optInt("id")}&imdbId=$imdbParam"
                 } else {
-                    "${streamApi}/$server/sources-with-title?title=$encTitle&mediaType=tv&year=$yearParam&tmdbId=${linkData.id}&episodeId=${linkData.episode}&seasonId=${linkData.season}&imdbId=$imdbParam"
+                    "${streamApi}/$server/sources-with-title?title=$encTitle&mediaType=tv&year=$yearParam&tmdbId=${json.optInt("id")}&episodeId=$episode&seasonId=$season&imdbId=$imdbParam"
                 }
 
                 val encrypted = runCatching {
@@ -283,7 +290,7 @@ class VidkingProvider : MainAPI() {
                 val decrypted = runCatching {
                     app.post(
                         "$decryptApi/dec-videasy",
-                        json = mapOf("text" to encrypted, "id" to linkData.id),
+                        json = mapOf("text" to encrypted, "id" to json.optInt("id")),
                         timeout = 5L
                     ).text
                 }.getOrNull() ?: return@withPermit
