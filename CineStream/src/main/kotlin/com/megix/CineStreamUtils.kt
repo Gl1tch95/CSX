@@ -55,7 +55,6 @@ import java.math.BigInteger
 // Settings
 import com.megix.settings.Settings
 
-import kotlin.random.Random
 
 class SpecOption(searchTerms: List<String>, val label: String) {
     constructor(term: String, label: String) : this(listOf(term), label)
@@ -1029,9 +1028,9 @@ suspend fun fetchTmdbLogoUrl(
     if (tmdbId == null) return null
 
     val url = if (type == TvType.Movie)
-        "$tmdbAPI/movie/$tmdbId/images?api_key=$apiKey&random=${Random.nextInt()}"
+        "$tmdbAPI/movie/$tmdbId/images?api_key=$apiKey"
     else
-        "$tmdbAPI/tv/$tmdbId/images?api_key=$apiKey&random=${Random.nextInt()}"
+        "$tmdbAPI/tv/$tmdbId/images?api_key=$apiKey"
 
     val json = runCatching { JSONObject(app.get(url).text) }.getOrNull() ?: return null
     val logos = json.optJSONArray("logos") ?: return null
@@ -1372,7 +1371,7 @@ fun peachifyDecrypt(encrypt: String): String? {
         val iv         = b64UrlDecode(parts[0])
         val cipherData = b64UrlDecode(parts[1]) + b64UrlDecode(parts[2])
 
-        val keyBytes = "d8f2a1b5e9c470814f6b2c3a5d8e7f901a2b3c4d5e3f7a8b9c0d1e2f3a4b5c6d"
+        val keyBytes = "a8f2a1b5e9c470814f6b2c3a5d8e7f9c1a2b3c4d5e3f7a8b8cad1e2d0a4d5c5b"
             .chunked(2)
             .map { it.toInt(16).toByte() }
             .toByteArray()
@@ -1567,4 +1566,98 @@ suspend fun getZinkLinks(
             )
         }
     }
+}
+
+//Showbox
+
+val SHOWBOX_HEADERS = mapOf(
+    "Accept"          to "application/json, text/html, */*",
+    "Accept-Language" to "en",
+    "User-Agent"      to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+)
+
+suspend fun searchSuperstream(imdbId: String): Int? {
+    repeat(7) { attempt ->
+        val result = runCatching {
+            val searchHtml = app.get(
+                "$showboxAPI/search?keyword=$imdbId",
+                headers = SHOWBOX_HEADERS
+            ).text
+            val detailUrl  = parseSearchHref(searchHtml) ?: return@runCatching null
+            val detailHtml = app.get(detailUrl, headers = SHOWBOX_HEADERS).text
+            parseHeadingId(detailHtml)
+        }.getOrNull()
+
+        if (result != null) return result
+        Log.d("Showbox", "searchSuperstream attempt ${attempt + 1} failed")
+        delay(1000)
+    }
+    return null
+}
+
+fun parseHeadingId(html: String): Int? {
+    return Regex("""class="heading-name[^"]*"[^>]*>[\s\S]*?<a[^>]+href="([^"]+)\"""")
+        .find(html)
+        ?.groupValues?.get(1)
+        ?.split("/")
+        ?.lastOrNull()
+        ?.toIntOrNull()
+}
+
+fun parseSearchHref(html: String): String? {
+    return (Regex("""class="film-name[^"]*"[^>]*>\s*<a[^>]+href="([^"]+)\"""").find(html)
+        ?: Regex("""<a[^>]+href="([^"]+)"[^>]*class="[^"]*film-name[^"]*\"""").find(html))
+        ?.groupValues?.get(1)
+        ?.let { "$showboxAPI$it" }
+}
+
+suspend fun getShareKey(mediaId: Int, type: Int): String? {
+
+    return runCatching {
+        app.get(
+            "$showboxAPI/index/share_link?id=$mediaId&type=$type",
+            headers = SHOWBOX_HEADERS
+        ).parsedSafe<ShareLinkResponse>()
+            ?.data?.link
+            ?.split("/")
+            ?.lastOrNull()
+    }.getOrNull()
+}
+
+suspend fun getFileList(shareKey: String, parentId: Long? = null, page: Int = 1): FileListData? {
+
+    return runCatching {
+        val url = buildString {
+            append("$febboxAPI/file/file_share_list?share_key=$shareKey")
+            if (parentId != null) append("&parent_id=$parentId&page=$page")
+        }
+        app.get(url, headers = SHOWBOX_HEADERS).parsedSafe<FileListResponse>()?.data
+    }.getOrNull()
+}
+
+suspend fun getVideoQualities(fid: Long, shareKey: String, febboxToken: String): List<VideoQuality> {
+    return runCatching {
+        val html = app.get(
+            "$febboxAPI/console/video_quality_list?fid=$fid&share_key=$shareKey",
+            headers = SHOWBOX_HEADERS + mapOf("Cookie" to normalizeToken(febboxToken))
+        ).parsedSafe<VideoQualityResponse>()?.html ?: return emptyList()
+        parseQualityDivs(html)
+    }.getOrElse { emptyList() }
+}
+
+fun normalizeToken(token: String): String = when {
+    token.startsWith("eyJ") -> "ui=$token"
+    token.startsWith("ui=") -> token
+    else                    -> "ui=$token"
+}
+
+fun parseQualityDivs(html: String): List<VideoQuality> {
+    return Regex("""<div[^>]*class="[^"]*file_quality[^"]*"[^>]*>""")
+        .findAll(html)
+        .mapNotNull { match ->
+            val tag     = match.value
+            val url     = Regex("""data-url="([^"]+)\"""").find(tag)?.groupValues?.get(1) ?: return@mapNotNull null
+            val quality = Regex("""data-quality="([^"]+)\"""").find(tag)?.groupValues?.get(1) ?: return@mapNotNull null
+            VideoQuality(url = url.replace("\\/", "/"), quality = quality)
+        }.toList()
 }
