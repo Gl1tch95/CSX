@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
+import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.json.JSONObject
 import java.net.URLEncoder
 import kotlinx.coroutines.sync.Semaphore
@@ -529,6 +530,25 @@ class VidkingProvider : MainAPI() {
         } else {
             newMovieSearchResponse(title, data, tvType) {
                 this.posterUrl = imageUrl(posterPath, 500)
+            }
+        }
+    }
+
+    private fun Media.toSearchResponse(defaultType: String? = null): SearchResponse? {
+        val resolvedType = mediaType ?: defaultType
+        if (resolvedType == "person") return null
+
+        val title = title ?: name ?: return null
+        val tvType = if (resolvedType == "tv") TvType.TvSeries else TvType.Movie
+        val data = LinkData(id = id, type = resolvedType ?: "movie").toJson()
+
+        return if (tvType == TvType.TvSeries) {
+            newTvSeriesSearchResponse(title, data, tvType) {
+                this.posterUrl = getImageUrl(posterPath)
+            }
+        } else {
+            newMovieSearchResponse(title, data, tvType) {
+                this.posterUrl = getImageUrl(posterPath)
             }
         }
     }
