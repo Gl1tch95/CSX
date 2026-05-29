@@ -76,108 +76,147 @@ class VidkingProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val data = parseJson<VidkingLinkData>(url)
-        val type = data.type
+        val data = parseJson<LinkData>(url)
+        val type = data.type ?: "movie"
 
-        val detailUrl = if (type == "movie") {
-            "${tmdbApi}/movie/${data.id}?language=en-US&append_to_response=external_ids"
+        val append = "alternative_titles,credits,external_ids,videos,recommendations,content_ratings,release_dates"
+
+        val resUrl = if (type == "movie") {
+            "${tmdbApi}/movie/${data.id}?language=en-US&append_to_response=$append"
         } else {
-            "${tmdbApi}/tv/${data.id}?language=en-US&append_to_response=external_ids"
+            "${tmdbApi}/tv/${data.id}?language=en-US&append_to_response=$append"
         }
 
-        val detail = app.get(detailUrl, timeout = 10L).parsedSafe<TmdbDetail>() ?: return null
-        val title = detail.title ?: detail.name ?: return null
-        val poster = imageUrl(detail.posterPath, 500)
-        val background = imageUrl(detail.backdropPath, 1280)
-        val year = (detail.releaseDate ?: detail.firstAirDate)?.substringBefore("-")?.toIntOrNull()
-        val tags = detail.genres?.mapNotNull { it.name }
+        val res = app.get(resUrl).parsedSafe<MediaDetail>() ?: return null
+        val title = res.title ?: res.name ?: return null
+        val poster = getOriImageUrl(res.posterPath)
+        val bgPoster = getOriImageUrl(res.backdropPath)
+        val ageRating = res.usAgeRating
+        val orgTitle = res.originalTitle ?: res.originalName
+        val releaseDate = res.releaseDate ?: res.firstAirDate
+        val year = releaseDate?.split("-")?.first()?.toIntOrNull()
+        val genres = res.genres?.mapNotNull { it.name }
+        val imdbId = res.external_ids?.imdb_id
+        val isCartoon = genres?.contains("Animation") ?: false
+        val isAnime = isCartoon && (res.original_language == "zh" || res.original_language == "ja" || res.original_language == "ko")
+        val isAsian = !isAnime && (res.original_language == "zh" || res.original_language == "ko")
+        val isBollywood = res.production_countries?.any { it.name == "India" } ?: false
+
+        val keywords = res.keywords?.results?.mapNotNull { it.name }.orEmpty()
+            .ifEmpty { res.keywords?.keywords?.mapNotNull { it.name } }
+
+        val actors = res.credits?.cast?.mapNotNull { cast ->
+            val name = cast.name ?: cast.originalName ?: return@mapNotNull null
+            ActorData(
+                Actor(name, getImageUrl(cast.profilePath)), roleString = cast.character
+            )
+        } ?: emptyList()
+
+        val logo = fetchTmdbLogoUrl(type, res.id)
+
+        val recommendations = res.recommendations?.results?.mapNotNull { media ->
+            media.toSearchResponse()
+        }
+
+        val trailer = res.videos?.results.orEmpty()
+            .filter { it.type == "Trailer" }
+            .map { "https://www.youtube.com/watch?v=${it.key}" }
+            .reversed()
+            .ifEmpty {
+                res.videos?.results?.map { "https://www.youtube.com/watch?v=${it.key}" } ?: emptyList()
+            }
 
         if (type == "tv") {
-            val seasons = detail.seasons.orEmpty()
-                .filter { (it.seasonNumber ?: 0) > 0 && (it.episodeCount ?: 0) > 0 }
-
-            val episodes = seasons.amap { season ->
-                val seasonNum = season.seasonNumber ?: return@amap emptyList()
-                val seasonRes = runCatching {
-                    app.get("${tmdbApi}/tv/${detail.id}/season/${seasonNum}?language=en-US", timeout = 10L)
-                        .parsedSafe<MediaDetailEpisodes>()
-                }.getOrNull()
-                val epList = seasonRes?.episodes
-                if (epList != null) {
-                    epList.map { eps ->
+            val lastSeason = res.last_episode_to_air?.season_number
+            val episodes = res.seasons?.filter { (it.seasonNumber ?: 0) != 0 }?.mapNotNull { season ->
+                app.get("${tmdbApi}/tv/${data.id}/season/${season.seasonNumber}?language=en-US")
+                    .parsedSafe<MediaDetailEpisodes>()?.episodes?.map { eps ->
                         newEpisode(
-                            VidkingLinkData(
-                                id = detail.id,
+                            LinkData(
+                                id = data.id,
+                                imdbId = res.external_ids?.imdb_id,
                                 type = "tv",
                                 season = eps.seasonNumber,
                                 episode = eps.episodeNumber,
                                 title = title,
-                                year = year,
-                                imdbId = detail.externalIds?.imdbId
+                                year = season.airDate?.split("-")?.first()?.toIntOrNull(),
+                                orgTitle = orgTitle,
+                                isAnime = isAnime,
+                                airedYear = year,
+                                lastSeason = lastSeason,
+                                epsTitle = eps.name,
+                                jpTitle = res.alternative_titles?.results?.find { it.iso_3166_1 == "JP" }?.title,
+                                date = season.airDate,
+                                airedDate = res.releaseDate ?: res.firstAirDate,
+                                isAsian = isAsian,
+                                isBollywood = isBollywood,
+                                isCartoon = isCartoon,
+                                alttitle = res.title,
+                                nametitle = res.name
                             ).toJson()
                         ) {
                             this.name = eps.name
                             this.season = eps.seasonNumber
                             this.episode = eps.episodeNumber
-                            this.posterUrl = imageUrl(eps.stillPath, 500)
+                            this.posterUrl = getImageUrl(eps.stillPath) ?: "https://github.com/SaurabhKaperwan/Utils/raw/refs/heads/main/missing_thumbnail.png"
+                            this.score = Score.from10(eps.voteAverage)
                             this.description = eps.overview
                             this.runTime = eps.runtime
                         }
                     }
-                } else {
-                    val episodeCount = season.episodeCount ?: 0
-                    (1..episodeCount).map { ep ->
-                        newEpisode(
-                            VidkingLinkData(
-                                id = detail.id,
-                                type = "tv",
-                                season = seasonNum,
-                                episode = ep,
-                                title = title,
-                                year = year,
-                                imdbId = detail.externalIds?.imdbId
-                            ).toJson()
-                        ) {
-                            this.name = "Episode $ep"
-                            this.season = seasonNum
-                            this.episode = ep
-                        }
-                    }
-                }
-            }.flatten()
+            }?.flatten() ?: listOf()
 
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
-                this.backgroundPosterUrl = background
-                this.plot = detail.overview
+                this.backgroundPosterUrl = bgPoster
                 this.year = year
-                this.tags = tags
-                this.seasonNames = seasons.mapNotNull { season ->
-                    val number = season.seasonNumber ?: return@mapNotNull null
-                    SeasonData(number, season.name ?: "Season $number")
-                }
-                addImdbId(detail.externalIds?.imdbId)
+                this.plot = res.overview
+                this.contentRating = ageRating
+                this.logoUrl = logo
+                this.tags = keywords?.map { word -> word.replaceFirstChar { it.titlecase() } }
+                    ?.takeIf { it.isNotEmpty() } ?: genres
+                this.score = Score.from10(res.vote_average.toString())
+                this.recommendations = recommendations
+                this.actors = actors
+                addTrailer(trailer)
+                addImdbId(imdbId)
             }
-        }
-
-        return newMovieLoadResponse(
-            title,
-            url,
-            TvType.Movie,
-            VidkingLinkData(
-                id = detail.id,
-                type = "movie",
-                title = title,
-                year = year,
-                imdbId = detail.externalIds?.imdbId
-            ).toJson()
-        ) {
-            this.posterUrl = poster
-            this.backgroundPosterUrl = background
-            this.plot = detail.overview
-            this.year = year
-            this.tags = tags
-            addImdbId(detail.externalIds?.imdbId)
+        } else {
+            return newMovieLoadResponse(
+                title,
+                url,
+                TvType.Movie,
+                LinkData(
+                    id = data.id,
+                    imdbId = res.external_ids?.imdb_id,
+                    type = "movie",
+                    title = title,
+                    year = year,
+                    orgTitle = orgTitle,
+                    isAnime = isAnime,
+                    jpTitle = res.alternative_titles?.results?.find { it.iso_3166_1 == "JP" }?.title,
+                    airedDate = res.releaseDate ?: res.firstAirDate,
+                    isAsian = isAsian,
+                    isBollywood = isBollywood,
+                    alttitle = res.title,
+                    nametitle = res.name
+                ).toJson()
+            ) {
+                this.posterUrl = poster
+                this.backgroundPosterUrl = bgPoster
+                this.year = year
+                this.plot = res.overview
+                this.duration = res.runtime
+                this.contentRating = ageRating
+                this.logoUrl = logo
+                this.tags = keywords?.map { word -> word.replaceFirstChar { it.titlecase() } }
+                    ?.takeIf { it.isNotEmpty() } ?: genres
+                this.score = Score.from10(res.vote_average.toString())
+                this.recommendations = recommendations
+                this.actors = actors
+                addTrailer(trailer)
+                addImdbId(imdbId)
+            }
         }
     }
 
@@ -187,7 +226,7 @@ class VidkingProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val linkData = parseJson<VidkingLinkData>(data)
+        val linkData = parseJson<LinkData>(data)
         val title = linkData.title ?: return false
 
         if (linkData.type == "tv" && (linkData.season == null || linkData.episode == null)) {
@@ -425,6 +464,40 @@ class VidkingProvider : MainAPI() {
 
     private fun String.capitalizeServer(): String = replaceFirstChar { it.uppercase() }
 
+    private fun getImageUrl(link: String?): String? {
+        if (link == null) return null
+        return if (link.startsWith("/")) "https://image.tmdb.org/t/p/w500/$link" else link
+    }
+
+    private fun getOriImageUrl(link: String?): String? {
+        if (link == null) return null
+        return if (link.startsWith("/")) "https://image.tmdb.org/t/p/original/$link" else link
+    }
+
+    private suspend fun fetchTmdbLogoUrl(
+        type: String,
+        tmdbId: Int?
+    ): String? {
+        if (tmdbId == null) return null
+        val url = if (type == "movie")
+            "${tmdbApi}/movie/$tmdbId/images"
+        else
+            "${tmdbApi}/tv/$tmdbId/images"
+
+        val json = runCatching { JSONObject(app.get(url).text) }.getOrNull() ?: return null
+        val logos = json.optJSONArray("logos") ?: return null
+        if (logos.length() == 0) return null
+
+        for (i in 0 until logos.length()) {
+            val logo = logos.optJSONObject(i) ?: continue
+            val path = logo.optString("file_path")
+            if (path.isNotBlank() && !path.endsWith(".svg", true)) {
+                return "https://image.tmdb.org/t/p/w500$path"
+            }
+        }
+        return null
+    }
+
     private fun getIndexQuality(str: String?): Int {
         if (str.isNullOrBlank()) return Qualities.Unknown.value
 
@@ -447,7 +520,7 @@ class VidkingProvider : MainAPI() {
 
         val title = title ?: name ?: originalTitle ?: originalName ?: return null
         val tvType = if (resolvedType == "tv") TvType.TvSeries else TvType.Movie
-        val data = VidkingLinkData(id = id, type = resolvedType ?: "movie").toJson()
+        val data = LinkData(id = id, type = resolvedType ?: "movie").toJson()
 
         return if (tvType == TvType.TvSeries) {
             newTvSeriesSearchResponse(title, data, tvType) {
@@ -460,14 +533,31 @@ class VidkingProvider : MainAPI() {
         }
     }
 
-    data class VidkingLinkData(
-        @param:JsonProperty("id") val id: Int,
-        @param:JsonProperty("type") val type: String,
+    data class LinkData(
+        @param:JsonProperty("id") val id: Int? = null,
+        @param:JsonProperty("imdbId") val imdbId: String? = null,
+        @param:JsonProperty("tvdbId") val tvdbId: Int? = null,
+        @param:JsonProperty("type") val type: String? = null,
         @param:JsonProperty("season") val season: Int? = null,
         @param:JsonProperty("episode") val episode: Int? = null,
+        @param:JsonProperty("epid") val epid: Int? = null,
+        @param:JsonProperty("aniId") val aniId: String? = null,
+        @param:JsonProperty("animeId") val animeId: String? = null,
         @param:JsonProperty("title") val title: String? = null,
         @param:JsonProperty("year") val year: Int? = null,
-        @param:JsonProperty("imdb_id") val imdbId: String? = null
+        @param:JsonProperty("orgTitle") val orgTitle: String? = null,
+        @param:JsonProperty("isAnime") val isAnime: Boolean = false,
+        @param:JsonProperty("airedYear") val airedYear: Int? = null,
+        @param:JsonProperty("lastSeason") val lastSeason: Int? = null,
+        @param:JsonProperty("epsTitle") val epsTitle: String? = null,
+        @param:JsonProperty("jpTitle") val jpTitle: String? = null,
+        @param:JsonProperty("date") val date: String? = null,
+        @param:JsonProperty("airedDate") val airedDate: String? = null,
+        @param:JsonProperty("isAsian") val isAsian: Boolean = false,
+        @param:JsonProperty("isBollywood") val isBollywood: Boolean = false,
+        @param:JsonProperty("isCartoon") val isCartoon: Boolean = false,
+        @param:JsonProperty("alttitle") val alttitle: String? = null,
+        @param:JsonProperty("nametitle") val nametitle: String? = null,
     )
 
     data class TmdbPagedResults(
@@ -486,8 +576,114 @@ class VidkingProvider : MainAPI() {
         @param:JsonProperty("poster_path") val posterPath: String? = null
     )
 
-    data class TmdbDetail(
-        @param:JsonProperty("id") val id: Int,
+    data class Genres(
+        @param:JsonProperty("id") val id: Int? = null,
+        @param:JsonProperty("name") val name: String? = null,
+    )
+
+    data class Keywords(
+        @param:JsonProperty("id") val id: Int? = null,
+        @param:JsonProperty("name") val name: String? = null,
+    )
+
+    data class KeywordResults(
+        @param:JsonProperty("results") val results: ArrayList<Keywords>? = arrayListOf(),
+        @param:JsonProperty("keywords") val keywords: ArrayList<Keywords>? = arrayListOf(),
+    )
+
+    data class LastEpisodeToAir(
+        @param:JsonProperty("episode_number") val episode_number: Int? = null,
+        @param:JsonProperty("season_number") val season_number: Int? = null,
+    )
+
+    data class Seasons(
+        @param:JsonProperty("id") val id: Int? = null,
+        @param:JsonProperty("name") val name: String? = null,
+        @param:JsonProperty("season_number") val seasonNumber: Int? = null,
+        @param:JsonProperty("air_date") val airDate: String? = null,
+    )
+
+    data class Trailers(
+        @param:JsonProperty("key") val key: String? = null,
+        @param:JsonProperty("type") val type: String? = null,
+    )
+
+    data class ResultsTrailer(
+        @param:JsonProperty("results") val results: ArrayList<Trailers>? = arrayListOf(),
+    )
+
+    data class ExternalIds(
+        @param:JsonProperty("imdb_id") val imdb_id: String? = null,
+        @param:JsonProperty("tvdb_id") val tvdb_id: Int? = null,
+    )
+
+    data class Credits(
+        @param:JsonProperty("cast") val cast: ArrayList<Cast>? = arrayListOf(),
+    )
+
+    data class Cast(
+        @param:JsonProperty("id") val id: Int? = null,
+        @param:JsonProperty("name") val name: String? = null,
+        @param:JsonProperty("original_name") val originalName: String? = null,
+        @param:JsonProperty("character") val character: String? = null,
+        @param:JsonProperty("known_for_department") val knownForDepartment: String? = null,
+        @param:JsonProperty("profile_path") val profilePath: String? = null,
+    )
+
+    data class ResultsRecommendations(
+        @param:JsonProperty("results") val results: ArrayList<Media>? = arrayListOf(),
+    )
+
+    data class Media(
+        @param:JsonProperty("id") val id: Int? = null,
+        @param:JsonProperty("name") val name: String? = null,
+        @param:JsonProperty("title") val title: String? = null,
+        @param:JsonProperty("original_title") val originalTitle: String? = null,
+        @param:JsonProperty("media_type") val mediaType: String? = null,
+        @param:JsonProperty("poster_path") val posterPath: String? = null,
+        @param:JsonProperty("vote_average") val voteAverage: Double? = null,
+    )
+
+    data class AltTitles(
+        @param:JsonProperty("iso_3166_1") val iso_3166_1: String? = null,
+        @param:JsonProperty("title") val title: String? = null,
+        @param:JsonProperty("type") val type: String? = null,
+    )
+
+    data class ResultsAltTitles(
+        @param:JsonProperty("results") val results: ArrayList<AltTitles>? = arrayListOf(),
+    )
+
+    data class ProductionCountries(
+        @param:JsonProperty("name") val name: String? = null,
+    )
+
+    data class ContentRatings(
+        @param:JsonProperty("results") val results: ArrayList<ContentRatingResult>? = arrayListOf()
+    )
+
+    data class ContentRatingResult(
+        @param:JsonProperty("iso_3166_1") val iso3166_1: String? = null,
+        @param:JsonProperty("rating") val rating: String? = null
+    )
+
+    data class ReleaseDates(
+        @param:JsonProperty("results") val results: ArrayList<ReleaseDatesResult>? = arrayListOf()
+    )
+
+    data class ReleaseDatesResult(
+        @param:JsonProperty("iso_3166_1") val iso3166_1: String? = null,
+        @param:JsonProperty("release_dates") val releaseDates: ArrayList<ReleaseDateItem>? = arrayListOf()
+    )
+
+    data class ReleaseDateItem(
+        @param:JsonProperty("certification") val certification: String? = null
+    )
+
+    data class MediaDetail(
+        @param:JsonProperty("id") val id: Int? = null,
+        @param:JsonProperty("adult") val adult: Boolean = false,
+        @param:JsonProperty("imdb_id") val imdbId: String? = null,
         @param:JsonProperty("title") val title: String? = null,
         @param:JsonProperty("name") val name: String? = null,
         @param:JsonProperty("original_title") val originalTitle: String? = null,
@@ -497,25 +693,30 @@ class VidkingProvider : MainAPI() {
         @param:JsonProperty("release_date") val releaseDate: String? = null,
         @param:JsonProperty("first_air_date") val firstAirDate: String? = null,
         @param:JsonProperty("overview") val overview: String? = null,
-        @param:JsonProperty("genres") val genres: List<TmdbGenre>? = null,
-        @param:JsonProperty("seasons") val seasons: List<TmdbSeason>? = null,
-        @param:JsonProperty("external_ids") val externalIds: TmdbExternalIds? = null
-    )
-
-    data class TmdbGenre(
-        @param:JsonProperty("id") val id: Int? = null,
-        @param:JsonProperty("name") val name: String? = null
-    )
-
-    data class TmdbSeason(
-        @param:JsonProperty("season_number") val seasonNumber: Int? = null,
-        @param:JsonProperty("episode_count") val episodeCount: Int? = null,
-        @param:JsonProperty("name") val name: String? = null
-    )
-
-    data class TmdbExternalIds(
-        @param:JsonProperty("imdb_id") val imdbId: String? = null
-    )
+        @param:JsonProperty("runtime") val runtime: Int? = null,
+        @param:JsonProperty("vote_average") val vote_average: Any? = null,
+        @param:JsonProperty("original_language") val original_language: String? = null,
+        @param:JsonProperty("status") val status: String? = null,
+        @param:JsonProperty("genres") val genres: ArrayList<Genres>? = arrayListOf(),
+        @param:JsonProperty("keywords") val keywords: KeywordResults? = null,
+        @param:JsonProperty("last_episode_to_air") val last_episode_to_air: LastEpisodeToAir? = null,
+        @param:JsonProperty("seasons") val seasons: ArrayList<Seasons>? = arrayListOf(),
+        @param:JsonProperty("videos") val videos: ResultsTrailer? = null,
+        @param:JsonProperty("external_ids") val external_ids: ExternalIds? = null,
+        @param:JsonProperty("credits") val credits: Credits? = null,
+        @param:JsonProperty("recommendations") val recommendations: ResultsRecommendations? = null,
+        @param:JsonProperty("alternative_titles") val alternative_titles: ResultsAltTitles? = null,
+        @param:JsonProperty("production_countries") val production_countries: ArrayList<ProductionCountries>? = arrayListOf(),
+        @param:JsonProperty("content_ratings") val contentRatings: ContentRatings? = null,
+        @param:JsonProperty("release_dates") val releaseDates: ReleaseDates? = null
+    ) {
+        val usAgeRating: String?
+            get() {
+                contentRatings?.results?.firstOrNull { it.iso3166_1 == "US" }?.rating?.takeIf { it.isNotBlank() }?.let { return it }
+                releaseDates?.results?.firstOrNull { it.iso3166_1 == "US" }?.releaseDates?.firstOrNull { !it.certification.isNullOrBlank() }?.certification?.let { return it }
+                return null
+            }
+    }
 
     data class Episodes(
         @param:JsonProperty("id") val id: Int? = null,
