@@ -461,60 +461,60 @@ class VidkingProvider : MainAPI() {
     }
 
     data class VidkingLinkData(
-        val id: Int,
-        val type: String,
-        val season: Int? = null,
-        val episode: Int? = null,
-        val title: String? = null,
-        val year: Int? = null,
-        @JsonProperty("imdb_id") val imdbId: String? = null
+        @param:JsonProperty("id") val id: Int,
+        @param:JsonProperty("type") val type: String,
+        @param:JsonProperty("season") val season: Int? = null,
+        @param:JsonProperty("episode") val episode: Int? = null,
+        @param:JsonProperty("title") val title: String? = null,
+        @param:JsonProperty("year") val year: Int? = null,
+        @param:JsonProperty("imdb_id") val imdbId: String? = null
     )
 
     data class TmdbPagedResults(
-        val page: Int? = null,
-        @JsonProperty("total_pages") val totalPages: Int? = null,
-        val results: List<TmdbMedia>? = null
+        @param:JsonProperty("page") val page: Int? = null,
+        @param:JsonProperty("total_pages") val totalPages: Int? = null,
+        @param:JsonProperty("results") val results: List<TmdbMedia>? = null
     )
 
     data class TmdbMedia(
-        val id: Int,
-        @JsonProperty("media_type") val mediaType: String? = null,
-        val title: String? = null,
-        val name: String? = null,
-        @JsonProperty("original_title") val originalTitle: String? = null,
-        @JsonProperty("original_name") val originalName: String? = null,
-        @JsonProperty("poster_path") val posterPath: String? = null
+        @param:JsonProperty("id") val id: Int,
+        @param:JsonProperty("media_type") val mediaType: String? = null,
+        @param:JsonProperty("title") val title: String? = null,
+        @param:JsonProperty("name") val name: String? = null,
+        @param:JsonProperty("original_title") val originalTitle: String? = null,
+        @param:JsonProperty("original_name") val originalName: String? = null,
+        @param:JsonProperty("poster_path") val posterPath: String? = null
     )
 
     data class TmdbDetail(
-        val id: Int,
-        val title: String? = null,
-        val name: String? = null,
-        @JsonProperty("original_title") val originalTitle: String? = null,
-        @JsonProperty("original_name") val originalName: String? = null,
-        @JsonProperty("poster_path") val posterPath: String? = null,
-        @JsonProperty("backdrop_path") val backdropPath: String? = null,
-        @JsonProperty("release_date") val releaseDate: String? = null,
-        @JsonProperty("first_air_date") val firstAirDate: String? = null,
-        val overview: String? = null,
-        val genres: List<TmdbGenre>? = null,
-        val seasons: List<TmdbSeason>? = null,
-        @JsonProperty("external_ids") val externalIds: TmdbExternalIds? = null
+        @param:JsonProperty("id") val id: Int,
+        @param:JsonProperty("title") val title: String? = null,
+        @param:JsonProperty("name") val name: String? = null,
+        @param:JsonProperty("original_title") val originalTitle: String? = null,
+        @param:JsonProperty("original_name") val originalName: String? = null,
+        @param:JsonProperty("poster_path") val posterPath: String? = null,
+        @param:JsonProperty("backdrop_path") val backdropPath: String? = null,
+        @param:JsonProperty("release_date") val releaseDate: String? = null,
+        @param:JsonProperty("first_air_date") val firstAirDate: String? = null,
+        @param:JsonProperty("overview") val overview: String? = null,
+        @param:JsonProperty("genres") val genres: List<TmdbGenre>? = null,
+        @param:JsonProperty("seasons") val seasons: List<TmdbSeason>? = null,
+        @param:JsonProperty("external_ids") val externalIds: TmdbExternalIds? = null
     )
 
     data class TmdbGenre(
-        val id: Int? = null,
-        val name: String? = null
+        @param:JsonProperty("id") val id: Int? = null,
+        @param:JsonProperty("name") val name: String? = null
     )
 
     data class TmdbSeason(
-        @JsonProperty("season_number") val seasonNumber: Int? = null,
-        @JsonProperty("episode_count") val episodeCount: Int? = null,
-        val name: String? = null
+        @param:JsonProperty("season_number") val seasonNumber: Int? = null,
+        @param:JsonProperty("episode_count") val episodeCount: Int? = null,
+        @param:JsonProperty("name") val name: String? = null
     )
 
     data class TmdbExternalIds(
-        @JsonProperty("imdb_id") val imdbId: String? = null
+        @param:JsonProperty("imdb_id") val imdbId: String? = null
     )
 
     data class Episodes(
