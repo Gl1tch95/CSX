@@ -100,7 +100,7 @@ class VidkingProvider : MainAPI() {
                 val seasonNum = season.seasonNumber ?: return@amap emptyList()
                 val seasonRes = runCatching {
                     app.get("${tmdbApi}/tv/${detail.id}/season/${seasonNum}?language=en-US", timeout = 10L)
-                        .parsedSafe<TmdbSeasonDetail>()
+                        .parsedSafe<MediaDetailEpisodes>()
                 }.getOrNull()
                 val epList = seasonRes?.episodes
                 if (epList != null) {
@@ -109,16 +109,16 @@ class VidkingProvider : MainAPI() {
                             VidkingLinkData(
                                 id = detail.id,
                                 type = "tv",
-                                season = seasonNum,
-                                episode = eps.episodeNumber ?: 0,
+                                season = eps.seasonNumber,
+                                episode = eps.episodeNumber,
                                 title = title,
                                 year = year,
                                 imdbId = detail.externalIds?.imdbId
                             ).toJson()
                         ) {
                             this.name = eps.name
-                            this.season = seasonNum
-                            this.episode = eps.episodeNumber ?: 0
+                            this.season = eps.seasonNumber
+                            this.episode = eps.episodeNumber
                             this.posterUrl = imageUrl(eps.stillPath, 500)
                             this.description = eps.overview
                             this.runTime = eps.runtime
@@ -517,15 +517,19 @@ class VidkingProvider : MainAPI() {
         @JsonProperty("imdb_id") val imdbId: String? = null
     )
 
-    data class TmdbSeasonDetail(
-        val episodes: List<TmdbEpisode>? = null
+    data class Episodes(
+        @param:JsonProperty("id") val id: Int? = null,
+        @param:JsonProperty("name") val name: String? = null,
+        @param:JsonProperty("overview") val overview: String? = null,
+        @param:JsonProperty("air_date") val airDate: String? = null,
+        @param:JsonProperty("still_path") val stillPath: String? = null,
+        @param:JsonProperty("vote_average") val voteAverage: Double? = null,
+        @param:JsonProperty("episode_number") val episodeNumber: Int? = null,
+        @param:JsonProperty("season_number") val seasonNumber: Int? = null,
+        @param:JsonProperty("runtime") val runtime: Int? = null,
     )
 
-    data class TmdbEpisode(
-        val name: String? = null,
-        val overview: String? = null,
-        @JsonProperty("episode_number") val episodeNumber: Int? = null,
-        @JsonProperty("still_path") val stillPath: String? = null,
-        val runtime: Int? = null
+    data class MediaDetailEpisodes(
+        @param:JsonProperty("episodes") val episodes: ArrayList<Episodes>? = arrayListOf(),
     )
 }
