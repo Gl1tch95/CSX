@@ -96,27 +96,55 @@ class VidkingProvider : MainAPI() {
             val seasons = detail.seasons.orEmpty()
                 .filter { (it.seasonNumber ?: 0) > 0 && (it.episodeCount ?: 0) > 0 }
 
-            val episodes = seasons.flatMap { season ->
-                val seasonNum = season.seasonNumber ?: return@flatMap emptyList()
-                val episodeCount = season.episodeCount ?: 0
-                (1..episodeCount).map { ep ->
-                    newEpisode(
-                        VidkingLinkData(
-                            id = detail.id,
-                            type = "tv",
-                            season = seasonNum,
-                            episode = ep,
-                            title = title,
-                            year = year,
-                            imdbId = detail.externalIds?.imdbId
-                        ).toJson()
-                    ) {
-                        this.name = "Episode $ep"
-                        this.season = seasonNum
-                        this.episode = ep
+            val episodes = seasons.amap { season ->
+                val seasonNum = season.seasonNumber ?: return@amap emptyList()
+                val seasonRes = runCatching {
+                    app.get("${tmdbApi}/tv/${detail.id}/season/${seasonNum}?language=en-US", timeout = 10L)
+                        .parsedSafe<TmdbSeasonDetail>()
+                }.getOrNull()
+                val epList = seasonRes?.episodes
+                if (epList != null) {
+                    epList.map { eps ->
+                        newEpisode(
+                            VidkingLinkData(
+                                id = detail.id,
+                                type = "tv",
+                                season = seasonNum,
+                                episode = eps.episodeNumber ?: 0,
+                                title = title,
+                                year = year,
+                                imdbId = detail.externalIds?.imdbId
+                            ).toJson()
+                        ) {
+                            this.name = eps.name
+                            this.season = seasonNum
+                            this.episode = eps.episodeNumber ?: 0
+                            this.posterUrl = imageUrl(eps.stillPath, 500)
+                            this.description = eps.overview
+                            this.runTime = eps.runtime
+                        }
+                    }
+                } else {
+                    val episodeCount = season.episodeCount ?: 0
+                    (1..episodeCount).map { ep ->
+                        newEpisode(
+                            VidkingLinkData(
+                                id = detail.id,
+                                type = "tv",
+                                season = seasonNum,
+                                episode = ep,
+                                title = title,
+                                year = year,
+                                imdbId = detail.externalIds?.imdbId
+                            ).toJson()
+                        ) {
+                            this.name = "Episode $ep"
+                            this.season = seasonNum
+                            this.episode = ep
+                        }
                     }
                 }
-            }
+            }.flatten()
 
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
@@ -178,8 +206,8 @@ class VidkingProvider : MainAPI() {
         val yearParam = linkData.year?.toString() ?: ""
 
         val servers = listOf(
-            "mb-flix",
             "cdn",
+            "mb-flix",
             "cuevana",
             "hdmovie",
             "lamovie"
@@ -232,6 +260,7 @@ class VidkingProvider : MainAPI() {
                                 linkType
                             ) {
                                 this.quality = getIndexQuality(quality)
+                                this.referer = "$mainUrl/"
                                 this.headers = headers
                             }
                         )
@@ -486,5 +515,17 @@ class VidkingProvider : MainAPI() {
 
     data class TmdbExternalIds(
         @JsonProperty("imdb_id") val imdbId: String? = null
+    )
+
+    data class TmdbSeasonDetail(
+        val episodes: List<TmdbEpisode>? = null
+    )
+
+    data class TmdbEpisode(
+        val name: String? = null,
+        val overview: String? = null,
+        @JsonProperty("episode_number") val episodeNumber: Int? = null,
+        @JsonProperty("still_path") val stillPath: String? = null,
+        val runtime: Int? = null
     )
 }
