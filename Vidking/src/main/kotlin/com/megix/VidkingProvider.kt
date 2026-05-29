@@ -20,9 +20,19 @@ class VidkingProvider : MainAPI() {
     override val hasMainPage = true
     override val hasQuickSearch = true
 
-    private val tmdbApi = "https://db.videasy.net/3"
+    private val apiUrl = "https://api.themoviedb.org/3"
     private val streamApi = "https://api.videasy.net"
     private val decryptApi = "https://enc-dec.app/api"
+
+    companion object {
+        private const val apiKey = BuildConfig.TMDB_KEY
+    }
+
+    private fun getTmdbUrl(relativeUrl: String): String {
+        val separator = if (relativeUrl.contains("?")) "&" else "?"
+        return "$apiUrl/$relativeUrl${separator}api_key=$apiKey"
+    }
+
 
     override val mainPage = mainPageOf(
         "trending/movie/day" to "Trending Movies",
@@ -54,8 +64,9 @@ class VidkingProvider : MainAPI() {
             else -> null
         }
 
+        val separator = if (request.data.contains("?")) "&" else "?"
         val res = app.get(
-            "${tmdbApi}/${request.data}?language=en-US&page=$page",
+            getTmdbUrl("${request.data}${separator}language=en-US&page=$page"),
             timeout = 10L
         ).parsedSafe<TmdbPagedResults>() ?: throw ErrorLoadingException("Invalid response")
 
@@ -67,7 +78,7 @@ class VidkingProvider : MainAPI() {
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
         val res = app.get(
-            "${tmdbApi}/search/multi?language=en-US&query=${quote(query)}&page=$page",
+            getTmdbUrl("search/multi?language=en-US&query=${quote(query)}&page=$page"),
             timeout = 10L
         ).parsedSafe<TmdbPagedResults>() ?: return null
 
@@ -83,10 +94,11 @@ class VidkingProvider : MainAPI() {
         val append = "alternative_titles,credits,external_ids,videos,recommendations,content_ratings,release_dates"
 
         val resUrl = if (type == "movie") {
-            "${tmdbApi}/movie/${data.id}?language=en-US&append_to_response=$append"
+            getTmdbUrl("movie/${data.id}?language=en-US&append_to_response=$append")
         } else {
-            "${tmdbApi}/tv/${data.id}?language=en-US&append_to_response=$append"
+            getTmdbUrl("tv/${data.id}?language=en-US&append_to_response=$append")
         }
+
 
         val res = app.get(resUrl).parsedSafe<MediaDetail>() ?: return null
         val title = res.title ?: res.name ?: return null
@@ -130,7 +142,7 @@ class VidkingProvider : MainAPI() {
         if (type == "tv") {
             val lastSeason = res.last_episode_to_air?.season_number
             val episodes = res.seasons?.filter { (it.seasonNumber ?: 0) != 0 }?.mapNotNull { season ->
-                app.get("${tmdbApi}/tv/${data.id}/season/${season.seasonNumber}?language=en-US")
+                app.get(getTmdbUrl("tv/${data.id}/season/${season.seasonNumber}?language=en-US"))
                     .parsedSafe<MediaDetailEpisodes>()?.episodes?.map { eps ->
                         newEpisode(
                             LinkData(
@@ -481,9 +493,9 @@ class VidkingProvider : MainAPI() {
     ): String? {
         if (tmdbId == null) return null
         val url = if (type == "movie")
-            "${tmdbApi}/movie/$tmdbId/images"
+            getTmdbUrl("movie/$tmdbId/images")
         else
-            "${tmdbApi}/tv/$tmdbId/images"
+            getTmdbUrl("tv/$tmdbId/images")
 
         val json = runCatching { JSONObject(app.get(url).text) }.getOrNull() ?: return null
         val logos = json.optJSONArray("logos") ?: return null
